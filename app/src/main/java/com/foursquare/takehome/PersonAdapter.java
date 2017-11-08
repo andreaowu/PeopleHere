@@ -16,6 +16,7 @@ import java.util.List;
 
 final public class PersonAdapter extends RecyclerView.Adapter<PersonAdapter.ViewHolder> {
 
+    // List of visitors, always sorted by arrival time
     private List<Person> visitors;
     private Context context;
 
@@ -70,40 +71,50 @@ final public class PersonAdapter extends RecyclerView.Adapter<PersonAdapter.View
         return visitors.size();
     }
 
+    /**
+     * This is the main method which adds the visitors to the list.
+     * It iterates over the given venue's visitor list and adds them to the this adapter's
+     * visitors list using binary search which is log(n) time, where n is the number of
+     * visitors in the venue's visitor list. Also, the visitor's time interval spent at the venue
+     * is added to a separate list that stores all time intervals during which there is a
+     * visitor at the given venue. After this first iteration, 'no visitors' are then added
+     * (with the same binary search as above) to the visitor list during which there are no
+     * visitors at the venue. The entire process is O(n log n) where n is the number of people
+     * in the venue's visitors list.
+     * @param venue to get the visitors list
+     * @return Nothing
+     */
     public void setVisitors(Venue venue) {
-        // Get list of visitors at the venue
         List<Person> visitorsList = venue.getVisitors();
 
-        // If there are no visitors, don't do anything
         if (visitorsList == null || visitorsList.isEmpty()) {
             return;
         }
 
-        // Tracks the intervals for which there are visitors at the venue
+        // Tracks the time intervals for which there are visitors at the venue
         ArrayList<long[]> storeVisitorTimes = new ArrayList<>();
 
-        // Get first person in the visitorsList and add it to lists
         Person person = visitorsList.get(0);
         visitors.add(person);
         storeVisitorTimes.add(new long[] {person.getArriveTime(), person.getLeaveTime()});
 
-        // Iterate through the visitors list once
         for (int i = 1; i < visitorsList.size(); i++) {
             person = visitorsList.get(i);
-
-            // Add visitor into the visitors list, sorted by arrival time
             addToVisitors(binarySearchInsert(person), person);
-
-            // Account for visitor's time in storeVisitorTimes
             storeVisitorTimes = updateStoreVisitorTimes(storeVisitorTimes, person);
         }
 
         // Add no visitors Persons where there are time gaps
-        visitors = addNoVisitors(storeVisitorTimes, venue.getOpenTime(), venue.getCloseTime());
+        addNoVisitors(storeVisitorTimes, venue.getOpenTime(), venue.getCloseTime());
     }
 
+    /**
+     * Keep visitors list sorted by time, and do binary search to find index at which to insert given person
+     * This function is O(log n) where n is the number of items in the visitors list
+     * @param person person being inserted into visitors list
+     * @return int index at which person is to be inserted into visitors list
+     */
     @VisibleForTesting
-    // Keep visitors sorted by time, and do binary search to find index at which to insert given person
     public int binarySearchInsert(Person person) {
         int visitorsSize = visitors.size();
         int low = 0;
@@ -118,14 +129,14 @@ final public class PersonAdapter extends RecyclerView.Adapter<PersonAdapter.View
                 break;
             }
             if (midArriveTime < arriveTime) {
-                boolean add = checkMid(low, high, mid, visitorsSize, arriveTime);
+                boolean add = recalibrateMid(low, high, mid, visitorsSize, arriveTime);
                 low = Math.min(visitorsSize, mid + 1);
                 mid = Math.min(low + (add ? 1 : 0), visitorsSize);
             } else if (midArriveTime > arriveTime) {
                 high = mid - 1 < 0 ? 0 : mid - 1;
             } else {
                 if (midLeaveTime < person.getLeaveTime()) {
-                    boolean add = checkMid(low, high, mid, visitorsSize, arriveTime);
+                    boolean add = recalibrateMid(low, high, mid, visitorsSize, arriveTime);
                     low = Math.min(visitorsSize, mid + 1);
                     mid = Math.min(low + (add ? 1 : 0), visitorsSize);
                 } else {
@@ -136,23 +147,46 @@ final public class PersonAdapter extends RecyclerView.Adapter<PersonAdapter.View
         return mid;
     }
 
-    private boolean checkMid(int low, int high, int mid, int visitorsSize, long arriveTime) {
-        boolean add = false;
+    /**
+     * Because the number of visitors may be odd, the calculated 'mid' index may be the actual
+     * middle or one more than the calculated 'mid'. This function takes care of this case.
+     * @param low binary search's bottom boundary
+     * @param high binary search's top boundary
+     * @param low binary search's bottom boundary
+     * @param visitorsSize size of visitors list
+     * @param arriveTime person's arrive time to be compared
+     * @return boolean whether to recalibrate mid
+     */
+    private boolean recalibrateMid(int low, int high, int mid, int visitorsSize, long arriveTime) {
         if ( (low + high % 2) != 0) {
             // This means the 'middle' could be mid or mid + 1, so check
             if (mid == visitorsSize - 1
                     || (mid + 1 < visitorsSize && visitors.get(mid + 1).getArriveTime() < arriveTime)) {
-                add = true;
+                return true;
             }
         }
-        return add;
+        return false;
     }
 
+    /**
+     * Add person to visitors list at given index. This was made a separate method for testing purposes.
+     * @param index index at which person should be added
+     * @param person person to be added to visitors list
+     * @return nothing
+     */
     @VisibleForTesting
     public void addToVisitors(int index, Person person) {
         visitors.add(index < 0 ? 0 : index, person);
     }
 
+    /**
+     * Add person's time duration at the venue to the list tracking all time intervals during which
+     * there are visitors at the venue.
+     * This function iterates through storeVisitorTimes once to add the person.
+     * @param storeVisitorTimes list of visitor intervals already added
+     * @param person person whose time is to be added to the intervals list
+     * @return ArrayList<long[]>
+     */
     @VisibleForTesting
     public ArrayList<long[]> updateStoreVisitorTimes(ArrayList<long[]> storeVisitorTimes, Person person) {
         // Keep track of whether person's times are already accounted for
@@ -221,7 +255,15 @@ final public class PersonAdapter extends RecyclerView.Adapter<PersonAdapter.View
         return storeVisitorTimes;
     }
 
-    private List<Person> addNoVisitors(ArrayList<long[]> storeVisitorTimes,
+    /**
+     * Add 'no visitor' person to visitors list for intervals during which there are no visitors at the venue.
+     * This function iterates through storeVisitorTimes once to find the intervals to add.
+     * @param storeVisitorTimes list of visitor intervals
+     * @param openTime venue's opening time
+     * @param closeTime venue's closing time
+     * @return nothing
+     */
+    private void addNoVisitors(ArrayList<long[]> storeVisitorTimes,
                                             long openTime, long closeTime) {
         // Check whether beginning of visitors starts at venue's open and close times
         if (storeVisitorTimes.get(0)[0] != openTime) {
@@ -239,11 +281,14 @@ final public class PersonAdapter extends RecyclerView.Adapter<PersonAdapter.View
             int insertIndex = binarySearchInsert(person);
             visitors.add(insertIndex < 0 ? 0 : insertIndex, person);
         }
-
-        return visitors;
     }
 
-    // Make a new 'no visitor' person
+    /**
+     * Make a new 'no visitors' person
+     * @param arrive start time for which there are no visitors
+     * @param leave end time for which there are no visitors
+     * @return person new person made with given arrive and leave times
+     */
     private Person makeNoVisitorPerson(long arrive, long leave) {
         Person person = new Person();
         person.setArriveTime((int) arrive);
