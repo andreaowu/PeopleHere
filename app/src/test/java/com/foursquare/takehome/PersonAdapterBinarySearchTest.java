@@ -1,10 +1,12 @@
 package com.foursquare.takehome;
 
 import android.content.Context;
+import android.content.res.Resources;
 
 import org.junit.Before;
 import org.junit.Test;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
 
 import java.util.ArrayList;
@@ -19,12 +21,17 @@ public class PersonAdapterBinarySearchTest {
     @Mock
     Context context;
 
+    @Mock
+    Resources resources;
+
     PersonAdapter personAdapter;
     ArrayList<Person> visitors;
 
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+        Mockito.when(context.getResources()).thenReturn(resources);
+        Mockito.when(context.getResources().getString(R.string.no_visitors)).thenReturn("No Visitors");
         personAdapter = new PersonAdapter(context);
         visitors = new ArrayList<>();
     }

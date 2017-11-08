@@ -1,11 +1,15 @@
 package com.foursquare.takehome;
 
 import android.content.Context;
+import android.content.res.Resources;
 
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.MockitoAnnotations;
+import org.robolectric.RobolectricTestRunner;
 
 import java.util.ArrayList;
 
@@ -19,12 +23,17 @@ public class PersonAdapterTimeIntervalsTest {
     @Mock
     Context context;
 
+    @Mock
+    Resources resources;
+
     PersonAdapter personAdapter;
     ArrayList<long[]> storeVisitorTimes;
 
     @Before
     public void setup() {
         MockitoAnnotations.initMocks(this);
+        Mockito.when(context.getResources()).thenReturn(resources);
+        Mockito.when(context.getResources().getString(R.string.no_visitors)).thenReturn("No Visitors");
         personAdapter = new PersonAdapter(context);
         storeVisitorTimes = new ArrayList<>();
     }
